@@ -2,32 +2,21 @@
 <script>
     let { product } = $props();
     
-    // Generate placeholder image based on category
-    const categoryImages = {
-        rod: '/images/products/rod-sample.png',
-        reel: '/images/products/reel-sample.png',
-        lure: '/images/products/lure-sample.png',
-        bait: '/images/products/bait-sample.png',
-        tackle: '/images/products/tackle-sample.png',
-        line: '/images/products/line-sample.png',
-        other: '/images/products/generic-sample.png'
-    };
+    // Use actual product image from Impact or fallback
+    const imageUrl = product.imageUrl || '/images/products/placeholder.jpg';
     
-    // Fallback to a generic fishing product image
-    const imageUrl = categoryImages[product.category] || categoryImages.other;
-    
-    // TODO: Replace with Bass Pro affiliate link when API is integrated
-    const productUrl = `https://www.basspro.com/search?q=${encodeURIComponent(product.name)}`;
+    // Calculate savings if there's a discount
+    const hasSavings = product.originalPrice && product.originalPrice > product.price;
+    const savings = hasSavings ? (product.originalPrice - product.price).toFixed(2) : null;
 </script>
 
 <a 
-    href={productUrl}
+    href={product.url}
     target="_blank"
     rel="noopener noreferrer"
     class="flex items-center gap-3 bg-white border border-slate-200 rounded-lg p-3 hover:border-blue-400 hover:shadow-md transition-all group"
 >
     <div class="w-20 h-20 bg-slate-100 rounded-md overflow-hidden shrink-0 flex items-center justify-center">
-        <!-- Placeholder for product image -->
         <img 
             src={imageUrl}
             alt={product.name}
@@ -43,12 +32,27 @@
         <h3 class="font-semibold text-slate-800 text-sm line-clamp-2 group-hover:text-blue-600 transition-colors">
             {product.name}
         </h3>
-        <p class="text-xs text-slate-500 mt-1 line-clamp-1">
-            {product.reason}
-        </p>
-        <p class="text-blue-600 font-bold mt-1">
-            ${product.price.toFixed(2)}
-        </p>
+        {#if product.reason}
+            <p class="text-xs text-slate-500 mt-1 line-clamp-1">
+                {product.reason}
+            </p>
+        {/if}
+        <div class="flex items-center gap-2 mt-1">
+            <p class="text-blue-600 font-bold">
+                ${product.price.toFixed(2)}
+            </p>
+            {#if hasSavings}
+                <span class="text-xs text-slate-400 line-through">
+                    ${product.originalPrice.toFixed(2)}
+                </span>
+                <span class="text-xs text-green-600 font-semibold">
+                    Save ${savings}
+                </span>
+            {/if}
+        </div>
+        {#if product.stockStatus === 'LowStock'}
+            <p class="text-xs text-orange-600 mt-1 font-medium">Only a few left!</p>
+        {/if}
     </div>
     <svg class="w-5 h-5 text-slate-400 group-hover:text-blue-600 transition-colors shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
