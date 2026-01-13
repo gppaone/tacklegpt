@@ -1,0 +1,19 @@
+services:
+  tacklegpt:
+    container_name: tacklegpt
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: always
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - BASE_PATH=/tacklegpt
+    ports:
+      - "3004:3000" # Change 3001 to whatever port is next in your sequence
+    networks:
+      - svelte_network
+
+networks:
+  svelte_network:
+    driver: bridge
