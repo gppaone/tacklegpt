@@ -1,5 +1,5 @@
-// src/lib/server/impactAPI.js
-import { IMPACT_ACCOUNT_SID, IMPACT_AUTH_TOKEN } from '$env/static/private';
+import { env } from '$env/dynamic/private';
+const { IMPACT_ACCOUNT_SID, IMPACT_AUTH_TOKEN } = env;
 
 /**
  * Search Impact catalog for fishing products

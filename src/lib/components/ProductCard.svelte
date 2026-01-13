@@ -3,11 +3,11 @@
     let { product } = $props();
     
     // Use actual product image from Impact or fallback
-    const imageUrl = product.imageUrl || '/images/products/placeholder.jpg';
+    const imageUrl = $derived(product.imageUrl || '/images/products/placeholder.jpg');
     
     // Calculate savings if there's a discount
-    const hasSavings = product.originalPrice && product.originalPrice > product.price;
-    const savings = hasSavings ? (product.originalPrice - product.price).toFixed(2) : null;
+    const hasSavings = $derived(product.originalPrice && product.originalPrice > product.price);
+    const savings = $derived(hasSavings ? (product.originalPrice - product.price).toFixed(2) : null);
 </script>
 
 <a 
