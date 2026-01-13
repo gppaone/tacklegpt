@@ -1,6 +1,7 @@
 // src/routes/+page.server.js
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import { GEMINI_API_KEY } from '$env/static/private';
+import { env } from '$env/dynamic/private';
+const { GEMINI_API_KEY} = env;
 import { getRelevantProducts } from '$lib/server/impactAPI';
 
 const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
