@@ -22,6 +22,20 @@
     let form = $derived($page.form);
 
     // Load history from localStorage on mount
+    $effect(() => {
+        if (browser) {
+            const saved = localStorage.getItem('fishingChatHistory');
+            if (saved) {
+                try {
+                    const parsed = JSON.parse(saved);
+                    chatHistory = parsed.map(chat => ({
+                        ...chat,
+                        timestamp: new Date(chat.timestamp)
+                    }));
+                } catch (e) { console.error("History load error", e); }
+            }
+        }
+    });
 // Update this $effect in your <script>
     $effect(() => {
         if (form?.advice && submittedQuestion && 
@@ -30,7 +44,7 @@
                 question: submittedQuestion,
                 answer: form.advice,
                 products: form.products || [],
-                location: form.location, // <--- Add this line
+                location: form.location,
                 timestamp: new Date()
             }];
             lastAddedQuestion = submittedQuestion;
@@ -41,6 +55,12 @@
                     chatContainer.scrollTop = chatContainer.scrollHeight;
                 }, 100);
             }
+        }
+    });
+    
+    $effect(() => {
+        if (browser && chatHistory.length > 0) {
+            localStorage.setItem('fishingChatHistory', JSON.stringify(chatHistory.slice(-5)));
         }
     });
 
