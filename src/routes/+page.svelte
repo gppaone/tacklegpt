@@ -22,6 +22,7 @@
     let form = $derived($page.form);
 
     // Load history from localStorage on mount
+// Update this $effect in your <script>
     $effect(() => {
         if (form?.advice && submittedQuestion && 
             (submittedQuestion !== lastAddedQuestion || form.advice !== lastAddedAdvice)) {
@@ -29,6 +30,7 @@
                 question: submittedQuestion,
                 answer: form.advice,
                 products: form.products || [],
+                location: form.location, // <--- Add this line
                 timestamp: new Date()
             }];
             lastAddedQuestion = submittedQuestion;
@@ -38,19 +40,6 @@
                 setTimeout(() => {
                     chatContainer.scrollTop = chatContainer.scrollHeight;
                 }, 100);
-            }
-        }
-    });
-
-    // Save to localStorage whenever chatHistory changes
-    $effect(() => {
-        if (browser && chatHistory.length > 0) {
-            // Keep only last 5 conversations
-            const recentHistory = chatHistory.slice(-5);
-            localStorage.setItem('fishingChatHistory', JSON.stringify(recentHistory));
-            // Update chatHistory if we trimmed it
-            if (recentHistory.length !== chatHistory.length) {
-                chatHistory = recentHistory;
             }
         }
     });
@@ -198,6 +187,11 @@
                     </div>
                     <div class="bg-slate-100 rounded-lg px-4 py-3 shadow-sm max-w-[80%]">
                         <div class="pro-response text-slate-800 text-sm">
+                            {#if chat.location}
+                                <p class="text-[10px] uppercase tracking-wider text-slate-500 font-bold mb-1">
+                                    📍 {chat.location.city}, {chat.location.region}
+                                </p>
+                            {/if}
                             {@html marked.parse(chat.answer.replace(/```[a-z]*\n?/gi, '').split('\n').map(line => line.trimStart()).join('\n'))}
                         </div>
                         <!-- Product Recommendations -->
@@ -234,6 +228,7 @@
                     </div>
                     <div class="bg-slate-100 rounded-lg px-4 py-3 shadow-sm max-w-[80%]">
                         <div class="pro-response text-slate-800 text-sm">
+                            <h3>Advice for {form.location.city}, {form.location.region}</h3>
                             {@html htmlAdvice}
                         </div>
                         <!-- Product Recommendations for Current Response -->

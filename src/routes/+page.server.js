@@ -1,7 +1,7 @@
 // src/routes/+page.server.js
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { env } from '$env/dynamic/private';
-const { GEMINI_API_KEY} = env;
+const { GEMINI_API_KEY } = env;
 import { getRelevantProducts } from '$lib/server/impactAPI';
 
 const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
@@ -11,7 +11,8 @@ export const actions = {
         const result = await testImpactConnection();
         return result;
     },
-    askPro: async ({ request }) => {
+    // Destructure 'locals' from the action event
+    askPro: async ({ request, locals }) => {
         try {
             const data = await request.formData();
             const userMsg = data.get('message');
@@ -23,12 +24,13 @@ export const actions = {
                 };
             }
             
-            // 1. Fetch Weather (US-Only Free NWS API)
-            const lat = "35.72"; // Replace with dynamic lat/lon later
-            const lon = "-78.85";
+            // 1. Get dynamic location from locals (populated by hooks.server.js)
+            // Fallback included just in case geo-lookup fails
+            const { lat, lon, city, region } = locals.location || { lat: "35.72", lon: "-78.85", city: "Apex", region: "NC" };
             
             let current;
             try {
+                // Using the dynamic coordinates
                 const weatherRes = await fetch(`https://api.weather.gov/points/${lat},${lon}`);
                 const points = await weatherRes.json();
                 const forecastRes = await fetch(points.properties.forecastHourly);
@@ -39,25 +41,26 @@ export const actions = {
                 current = { temperature: 70, windSpeed: '5 mph' };
             }
 
-            // 2. Get relevant products from Impact API (parallel with AI response)
+            // 2. Get relevant products from Impact API
             const productsPromise = getRelevantProducts(userMsg);
 
             // 3. Get AI advice
             const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash-lite" });
             
-            const prompt = `You are an elite Bass Pro. Current weather: ${current.temperature}°F. 
+            // Added location context to the prompt for better AI advice
+            const prompt = `You are an elite Bass Pro. Location: ${city}, ${region}. Current weather: ${current.temperature}°F. 
 User situation: ${userMsg}
 Output in Markdown. CRITICAL: Do not indent any lines. Every line must start at the very beginning of the margin (no leading spaces). Do not use backticks or code blocks. Use only #, ##, **, and - for formatting.`;
 
             const result = await model.generateContent(prompt);
             const response = await result.response;
             
-            // 4. Wait for products to load
             const products = await productsPromise;
             
             return { 
                 advice: response.text(),
                 products: products,
+                location: { city, region }, // Passing this back so the UI can show "Weather for Apex, NC"
                 success: true 
             };
         } catch (error) {
