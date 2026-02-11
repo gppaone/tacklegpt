@@ -19,9 +19,9 @@ export async function searchImpactProducts(keyword, maxResults = 2) {
         // Use ItemSearch endpoint (confirmed working)
         const url = new URL(`https://api.impact.com/Mediapartners/${IMPACT_ACCOUNT_SID}/Catalogs/ItemSearch`);
         
-        // Add query parameters
+        // Add query parameters (fetch larger pool so caller can randomize selection)
         url.searchParams.append('Keyword', keyword);
-        url.searchParams.append('PageSize', Math.max(maxResults * 2, 10).toString()); // Get more to filter
+        url.searchParams.append('PageSize', '30');
         
         console.log('🌐 Full URL:', url.toString());
 
@@ -176,7 +176,23 @@ export async function getRelevantProducts(userQuestion) {
         return await searchImpactProducts('bass pro shops ' + keywords[0].split(' ').pop(), 2);
     }
     
-    return filteredProducts.slice(0, 2);
+    // Randomly pick 2 products from the pool so similar questions get variety
+    const shuffled = shuffleArray([...filteredProducts]);
+    return shuffled.slice(0, 2);
+}
+
+/**
+ * Fisher-Yates shuffle for randomizing array order
+ * @param {Array} array
+ * @returns {Array} New shuffled array
+ */
+function shuffleArray(array) {
+    const out = [...array];
+    for (let i = out.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [out[i], out[j]] = [out[j], out[i]];
+    }
+    return out;
 }
 
 /**

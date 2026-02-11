@@ -15,8 +15,8 @@
     let showHistory = $state(false);
     let chatHistory = $state([]);
     let chatContainer = $state();
-    let lastAddedQuestion = $state('');
-    let lastAddedAdvice = $state('');
+    let currentConversation = $state([]);
+    let activeConversationId = $state(null);
 
     // Access form data from SvelteKit page store
     let form = $derived($page.form);
@@ -30,37 +30,25 @@
                     const parsed = JSON.parse(saved);
                     chatHistory = parsed.map(chat => ({
                         ...chat,
+                        id: chat.id || crypto.randomUUID(),
                         timestamp: new Date(chat.timestamp)
                     }));
                 } catch (e) { console.error("History load error", e); }
             }
         }
     });
-// Update this $effect in your <script>
-    $effect(() => {
-        if (form?.advice && submittedQuestion && 
-            (submittedQuestion !== lastAddedQuestion || form.advice !== lastAddedAdvice)) {
-            chatHistory = [...chatHistory, {
-                question: submittedQuestion,
-                answer: form.advice,
-                products: form.products || [],
-                location: form.location,
-                timestamp: new Date()
-            }];
-            lastAddedQuestion = submittedQuestion;
-            lastAddedAdvice = form.advice;
-            
-            if (chatContainer) {
-                setTimeout(() => {
-                    chatContainer.scrollTop = chatContainer.scrollHeight;
-                }, 100);
-            }
-        }
-    });
     
+    // Save history to localStorage
     $effect(() => {
         if (browser && chatHistory.length > 0) {
             localStorage.setItem('fishingChatHistory', JSON.stringify(chatHistory.slice(-5)));
+        }
+    });
+
+    // Scroll to bottom when chat updates
+    $effect(() => {
+        if (chatContainer) {
+            chatContainer.scrollTop = chatContainer.scrollHeight;
         }
     });
 
@@ -77,61 +65,60 @@
     }
 
     function loadConversation(chat) {
+        // Don't reload if it's already the active conversation
+        if (activeConversationId === chat.id) {
+            showHistory = false;
+            return;
+        }
+        
         // Close the modal
         showHistory = false;
         
-        // Set the question and submitted question to show it in the chat
-        question = chat.question;
-        submittedQuestion = chat.question;
+        // Set as active conversation
+        activeConversationId = chat.id;
         
-        // Manually trigger the form with the selected question
-        // This will send it to the API again
-        setTimeout(() => {
-            if (formElement) {
-                formElement.requestSubmit();
-            }
-        }, 100);
+        // Replace current conversation with this one
+        currentConversation = [chat];
+        
+        // Clear the inputs
+        question = '';
+        submittedQuestion = '';
     }
 
-    // Add messages to history when form updates
-    $effect(() => {
-        if (form?.advice && submittedQuestion && 
-            (submittedQuestion !== lastAddedQuestion || form.advice !== lastAddedAdvice)) {
-            chatHistory = [...chatHistory, {
-                question: submittedQuestion,
-                answer: form.advice,
-                timestamp: new Date()
-            }];
-            lastAddedQuestion = submittedQuestion;
-            lastAddedAdvice = form.advice;
+    function startNewConversation() {
+        activeConversationId = null;
+        currentConversation = [];
+        submittedQuestion = '';
+        question = '';
+    }
+
+    function handleFormSubmit() {
+        return async ({ result, update }) => {
+            await update();
+            isLoading = false;
+            question = '';
             
-            // Scroll to bottom when new message arrives
-            if (chatContainer) {
-                setTimeout(() => {
-                    chatContainer.scrollTop = chatContainer.scrollHeight;
-                }, 100);
+            // Add the new message after the form response is received
+            if (result.type === 'success' && result.data?.advice) {
+                const newMessage = {
+                    id: crypto.randomUUID(),
+                    question: submittedQuestion,
+                    answer: result.data.advice,
+                    products: result.data.products || [],
+                    location: result.data.location,
+                    timestamp: new Date()
+                };
+                
+                // Add to current conversation
+                currentConversation = [...currentConversation, newMessage];
+                
+                // If this is a new conversation (not loaded from history), add to history
+                if (!activeConversationId) {
+                    chatHistory = [...chatHistory, newMessage];
+                }
             }
-        }
-    });
-
-    // Scroll to bottom on mount or when chat updates
-    $effect(() => {
-        if (chatContainer) {
-            chatContainer.scrollTop = chatContainer.scrollHeight;
-        }
-    });
-
-    let isCurrentResponseInHistory = $derived.by(() => {
-        if (!form?.advice || !submittedQuestion) return false;
-        const lastHistoryItem = chatHistory[chatHistory.length - 1];
-        return lastHistoryItem?.question === submittedQuestion && 
-            lastHistoryItem?.answer === form.advice;
-    });
-
-    let isCurrentQuestionInHistory = $derived.by(() => {
-        if (!submittedQuestion) return false;
-        return chatHistory.some(chat => chat.question === submittedQuestion);
-    });
+        };
+    }
 
     let htmlAdvice = $derived.by(() => {
         if (!form?.advice) return '';
@@ -152,6 +139,7 @@
                 localStorage.removeItem('fishingChatHistory');
             }
             showHistory = false;
+            startNewConversation();
         }
     }
 </script>
@@ -165,12 +153,22 @@
             </div>
             <h1 class="text-lg font-semibold">TackleGPT</h1>
         </div>
-        <button
-            onclick={toggleHistory}
-            class="px-4 py-2 bg-blue-500 hover:bg-blue-400 rounded-lg text-sm font-medium transition-colors"
-        >
-            History ({chatHistory.length})
-        </button>
+        <div class="flex items-center gap-2">
+            {#if currentConversation.length > 0 || submittedQuestion}
+                <button
+                    onclick={startNewConversation}
+                    class="px-4 py-2 bg-blue-700 hover:bg-blue-600 rounded-lg text-sm font-medium transition-colors"
+                >
+                    New Chat
+                </button>
+            {/if}
+            <button
+                onclick={toggleHistory}
+                class="px-4 py-2 bg-blue-500 hover:bg-blue-400 rounded-lg text-sm font-medium transition-colors"
+            >
+                History ({chatHistory.length})
+            </button>
+        </div>
     </header>
 
     <!-- Chat Area -->
@@ -179,7 +177,7 @@
         class="flex-1 overflow-y-auto px-4 py-6 bg-white"
     >
         <div class="max-w-3xl mx-auto space-y-4">
-            {#if chatHistory.length === 0 && !form?.advice && !isLoading}
+            {#if currentConversation.length === 0 && !isLoading}
                 <!-- Welcome Message -->
                 <div class="flex items-start gap-3">
                     <div class="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center shrink-0 mt-1">
@@ -191,8 +189,8 @@
                 </div>
             {/if}
 
-            <!-- Chat History -->
-            {#each chatHistory as chat}
+            <!-- Display Current Conversation -->
+            {#each currentConversation as chat}
                 <!-- User Message -->
                 <div class="flex justify-end">
                     <div class="bg-blue-500 text-white rounded-lg px-4 py-3 shadow-sm max-w-[80%]">
@@ -230,43 +228,6 @@
                 </div>
             {/each}
 
-            <!-- Current Conversation -->
-            {#if submittedQuestion && !isCurrentQuestionInHistory}
-                <!-- User Message -->
-                <div class="flex justify-end">
-                    <div class="bg-blue-500 text-white rounded-lg px-4 py-3 shadow-sm max-w-[80%]">
-                        <p class="text-sm">{submittedQuestion}</p>
-                    </div>
-                </div>
-            {/if}
-
-            {#if form?.advice && !isCurrentResponseInHistory}
-                <!-- Bot Response -->
-                <div class="flex items-start gap-3">
-                    <div class="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center shrink-0 mt-1">
-                        <img src="/images/fish-logo.png" alt="Catch Pro" class="w-full h-full object-contain p-0.5" />
-                    </div>
-                    <div class="bg-slate-100 rounded-lg px-4 py-3 shadow-sm max-w-[80%]">
-                        <div class="pro-response text-slate-800 text-sm">
-                            <h3>Advice for {form.location.city}, {form.location.region}</h3>
-                            {@html htmlAdvice}
-                        </div>
-                        <!-- Product Recommendations for Current Response -->
-                        {#if form.products && form.products.length > 0}
-                            <div class="mt-4 pt-4 border-t border-slate-200">
-                                <p class="text-xs font-semibold text-slate-600 mb-3">Recommended Products:</p>
-                                <div class="space-y-2">
-                                    {#each form.products as product}
-                                        <ProductCard {product} />
-                                    {/each}
-                                </div>
-                                <p class="text-xs text-slate-500 mt-2 text-center">Products are affiliate links. If you buy something, I get a commission.</p>
-                            </div>
-                        {/if}
-                    </div>
-                </div>
-            {/if}
-
             {#if isLoading}
                 <!-- Loading Indicator -->
                 <div class="flex items-start gap-3">
@@ -295,13 +256,7 @@
                 use:enhance={() => {
                     isLoading = true;
                     submittedQuestion = question;
-                    lastAddedQuestion = '';
-                    lastAddedAdvice = '';
-                    return async ({ update }) => {
-                        await update();
-                        isLoading = false;
-                        question = '';
-                    };
+                    return handleFormSubmit();
                 }}
                 class="flex items-end gap-2"
             >
@@ -317,6 +272,8 @@
                     rows="1"
                     class="flex-1 bg-slate-50 border border-slate-300 rounded-lg px-4 py-2 resize-none overflow-hidden min-h-[44px] max-h-[120px] focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-slate-800 placeholder-slate-400"
                 ></textarea>
+                <!-- Hidden input to send conversation history -->
+                <input type="hidden" name="conversationHistory" value={JSON.stringify(currentConversation)} />
                 <button
                     type="submit"
                     disabled={isLoading || !question.trim()}
@@ -359,7 +316,7 @@
                             {#each chatHistory.slice().reverse() as chat, index}
                                 <button
                                     onclick={() => loadConversation(chat)}
-                                    class="w-full text-left bg-slate-50 hover:bg-slate-100 rounded-lg p-4 transition-colors border border-slate-200 hover:border-blue-300"
+                                    class="w-full text-left bg-slate-50 hover:bg-slate-100 rounded-lg p-4 transition-colors border border-slate-200 hover:border-blue-300 {activeConversationId === chat.id ? 'ring-2 ring-blue-500 bg-blue-50' : ''}"
                                 >
                                     <div class="flex items-start justify-between gap-3 mb-2">
                                         <p class="font-medium text-slate-800 text-sm line-clamp-2 flex-1">
@@ -372,6 +329,9 @@
                                     <p class="text-xs text-slate-600 line-clamp-2">
                                         {chat.answer.replace(/[#*`]/g, '').substring(0, 100)}...
                                     </p>
+                                    {#if activeConversationId === chat.id}
+                                        <span class="text-xs text-blue-600 font-medium mt-2 inline-block">Active</span>
+                                    {/if}
                                 </button>
                             {/each}
                         </div>
@@ -391,90 +351,3 @@
         </div>
     {/if}
 </div>
-
-<style>
-    /* Styling for markdown content in chat bubbles */
-    :global(.pro-response h1) {
-        font-size: 1.2em;
-        font-weight: bold;
-        margin-top: 0.5em;
-        margin-bottom: 0.5em;
-    }
-    
-    :global(.pro-response h2) {
-        font-size: 1.1em;
-        font-weight: bold;
-        margin-top: 0.5em;
-        margin-bottom: 0.5em;
-    }
-    
-    :global(.pro-response h3) {
-        font-size: 1em;
-        font-weight: bold;
-        margin-top: 0.5em;
-        margin-bottom: 0.5em;
-    }
-    
-    :global(.pro-response p) {
-        margin-bottom: 0.75em;
-        line-height: 1.5;
-    }
-    
-    :global(.pro-response p:last-child) {
-        margin-bottom: 0;
-    }
-    
-    :global(.pro-response ul, .pro-response ol) {
-        margin-left: 1.25em;
-        margin-bottom: 0.75em;
-    }
-    
-    :global(.pro-response li) {
-        margin-bottom: 0.25em;
-    }
-    
-    :global(.pro-response strong) {
-        font-weight: 600;
-    }
-    
-    :global(.pro-response em) {
-        font-style: italic;
-    }
-    
-    :global(.pro-response code) {
-        background-color: rgba(0, 0, 0, 0.05);
-        padding: 0.15em 0.3em;
-        border-radius: 0.25em;
-        font-family: monospace;
-        font-size: 0.9em;
-    }
-    
-    :global(.pro-response pre) {
-        background-color: rgba(0, 0, 0, 0.05);
-        padding: 0.75em;
-        border-radius: 0.5em;
-        overflow-x: auto;
-        margin-bottom: 0.75em;
-    }
-    
-    :global(.pro-response pre code) {
-        background-color: transparent;
-        padding: 0;
-    }
-    
-    :global(.pro-response blockquote) {
-        border-left: 3px solid #94a3b8;
-        padding-left: 0.75em;
-        margin-left: 0;
-        margin-bottom: 0.75em;
-        font-style: italic;
-        color: #64748b;
-    }
-
-    .line-clamp-2 {
-        display: -webkit-box;
-        -webkit-line-clamp: 2;
-        -webkit-box-orient: vertical;
-        overflow: hidden;
-    }
-</style>
